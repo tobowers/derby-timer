@@ -1,0 +1,16 @@
+{
+  "name": "derby-timer",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@playwright/test": "^1.57.0",
+    "agent-browser": "^0.6.0"
+  }
+}
