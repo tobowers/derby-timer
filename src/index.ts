@@ -1,9 +1,9 @@
-import index from "../index.html";
+import index from "./frontend/index.html";
+import display from "./frontend/display.html";
 import {
   getDb,
   EventRepository,
   RacerRepository,
-  CarRepository,
   HeatRepository,
   ResultRepository,
   umzug,
@@ -16,7 +16,6 @@ console.log("Database initialized");
 // Repository instances
 const eventsRepo = new EventRepository();
 const racersRepo = new RacerRepository();
-const carsRepo = new CarRepository();
 const heatsRepo = new HeatRepository();
 const resultsRepo = new ResultRepository();
 
@@ -61,7 +60,7 @@ Bun.serve({
     "/heats": index,
     "/race": index,
     "/standings": index,
-    "/display": index,
+    "/display": display,
 
     // ===== EVENTS API =====
     "/api/events": {
@@ -111,7 +110,7 @@ Bun.serve({
       },
     },
 
-    // ===== RACERS API =====
+    // ===== RACERS API (includes car info now) =====
     "/api/events/:eventId/racers": {
       GET: (req) => {
         const racers = racersRepo.findByEvent(req.params.eventId);
@@ -119,22 +118,18 @@ Bun.serve({
       },
       POST: async (req) => {
         const body = (await req.json()) as {
-          first_name: string;
-          last_name: string;
+          name: string;
           den?: string;
-          rank?: string;
-          contact?: string;
+          car_number: string;
         };
-        if (!body.first_name || !body.last_name) {
-          return respondJson({ error: "First and last name are required" }, 400);
+        if (!body.name || !body.car_number) {
+          return respondJson({ error: "Name and car number are required" }, 400);
         }
         const racer = racersRepo.create({
           event_id: req.params.eventId,
-          first_name: body.first_name,
-          last_name: body.last_name,
+          name: body.name,
           den: body.den,
-          rank: body.rank,
-          contact: body.contact,
+          car_number: body.car_number,
         });
         return respondJson(racer, 201);
       },
@@ -148,11 +143,10 @@ Bun.serve({
       },
       PATCH: async (req) => {
         const body = (await req.json()) as {
-          first_name?: string;
-          last_name?: string;
+          name?: string;
           den?: string;
-          rank?: string;
-          contact?: string;
+          car_number?: string;
+          weight_ok?: boolean;
         };
         const racer = racersRepo.update(req.params.id, body);
         if (!racer) return respondJson({ error: "Racer not found" }, 404);
@@ -165,66 +159,12 @@ Bun.serve({
       },
     },
 
-    // ===== CARS API =====
-    "/api/events/:eventId/cars": {
-      GET: (req) => {
-        const cars = carsRepo.findByEvent(req.params.eventId);
-        return respondJson(cars);
-      },
-      POST: async (req) => {
-        const body = (await req.json()) as {
-          racer_id: string;
-          car_number: string;
-          name?: string;
-          class?: string;
-        };
-        if (!body.racer_id || !body.car_number) {
-          return respondJson(
-            { error: "Racer ID and car number are required" },
-            400
-          );
-        }
-        const car = carsRepo.create({
-          event_id: req.params.eventId,
-          racer_id: body.racer_id,
-          car_number: body.car_number,
-          name: body.name,
-          class: body.class,
-        });
-        return respondJson(car, 201);
-      },
-    },
-
-    "/api/cars/:id": {
-      GET: (req) => {
-        const car = carsRepo.findById(req.params.id);
-        if (!car) return respondJson({ error: "Car not found" }, 404);
-        return respondJson(car);
-      },
-      PATCH: async (req) => {
-        const body = (await req.json()) as {
-          car_number?: string;
-          name?: string;
-          class?: string;
-          weight_ok?: boolean;
-        };
-        const car = carsRepo.update(req.params.id, body);
-        if (!car) return respondJson({ error: "Car not found" }, 404);
-        return respondJson(car);
-      },
-      DELETE: (req) => {
-        const deleted = carsRepo.delete(req.params.id);
-        if (!deleted) return respondJson({ error: "Car not found" }, 404);
-        return respondJson({ success: true });
-      },
-    },
-
-    "/api/cars/:id/inspect": {
+    "/api/racers/:id/inspect": {
       POST: async (req) => {
         const body = (await req.json()) as { weight_ok: boolean };
-        const car = carsRepo.inspect(req.params.id, body.weight_ok ?? false);
-        if (!car) return respondJson({ error: "Car not found" }, 404);
-        return respondJson(car);
+        const racer = racersRepo.inspect(req.params.id, body.weight_ok ?? false);
+        if (!racer) return respondJson({ error: "Racer not found" }, 404);
+        return respondJson(racer);
       },
     },
 
@@ -238,7 +178,7 @@ Bun.serve({
         const body = (await req.json()) as {
           round: number;
           heat_number: number;
-          lanes: { lane_number: number; car_id: string }[];
+          lanes: { lane_number: number; racer_id: string }[];
         };
         if (!body.lanes || body.lanes.length === 0) {
           return respondJson({ error: "Lanes are required" }, 400);
@@ -309,9 +249,9 @@ Bun.serve({
         const event = eventsRepo.findById(req.params.eventId);
         if (!event) return respondJson({ error: "Event not found" }, 404);
 
-        const cars = carsRepo.findByEvent(req.params.eventId);
-        if (cars.length === 0) {
-          return respondJson({ error: "No cars registered" }, 400);
+        const racers = racersRepo.findInspectedByEvent(req.params.eventId);
+        if (racers.length === 0) {
+          return respondJson({ error: "No racers have passed inspection" }, 400);
         }
 
         // Delete existing heats
@@ -322,21 +262,21 @@ Bun.serve({
 
         // Generate balanced lane rotation
         const heats = generateBalancedHeats(
-          cars.map((c) => ({ id: c.id, car_number: c.car_number })),
+          racers.map((r) => ({ id: r.id, car_number: r.car_number })),
           laneCount,
           rounds
         );
 
         // Save heats
         let heatNumber = 1;
-        for (const heatCars of heats) {
+        for (const heatRacers of heats) {
           heatsRepo.create({
             event_id: req.params.eventId,
             round: 1,
             heat_number: heatNumber++,
-            lanes: heatCars.map((car, idx) => ({
+            lanes: heatRacers.map((racer, idx) => ({
               lane_number: idx + 1,
-              car_id: car.id,
+              racer_id: racer.id,
             })),
           });
         }
@@ -359,7 +299,7 @@ Bun.serve({
         const body = (await req.json()) as {
           results: {
             lane_number: number;
-            car_id: string;
+            racer_id: string;
             place: number;
             time_ms?: number;
             dnf?: boolean;
@@ -385,16 +325,6 @@ Bun.serve({
     "/api/events/:eventId/standings": {
       GET: (req) => {
         const standings = resultsRepo.getStandings(req.params.eventId);
-        return respondJson(standings);
-      },
-    },
-
-    "/api/events/:eventId/standings/:className": {
-      GET: (req) => {
-        const standings = resultsRepo.getStandingsByClass(
-          req.params.eventId,
-          req.params.className
-        );
         return respondJson(standings);
       },
     },
@@ -432,42 +362,42 @@ Bun.serve({
 
 // Heat generation algorithm - balanced lane rotation
 function generateBalancedHeats(
-  cars: { id: string; car_number: string }[],
+  racers: { id: string; car_number: string }[],
   laneCount: number,
   rounds: number
 ): { id: string; car_number: string }[][] {
   const heats: { id: string; car_number: string }[][] = [];
-  const totalCars = cars.length;
+  const totalRacers = racers.length;
 
-  // If we have fewer cars than lanes, we need to run multiple rounds
-  // to ensure each car runs in each lane
-  if (totalCars <= laneCount) {
+  // If we have fewer racers than lanes, we need to run multiple rounds
+  // to ensure each racer runs in each lane
+  if (totalRacers <= laneCount) {
     for (let round = 0; round < rounds; round++) {
       // Rotate starting position for each round
-      const rotation = round % totalCars;
+      const rotation = round % totalRacers;
       const heat: { id: string; car_number: string }[] = [];
 
       for (let lane = 0; lane < laneCount; lane++) {
-        const carIndex = (rotation + lane) % totalCars;
-        const car = cars[carIndex];
-        if (car) heat.push(car);
+        const racerIndex = (rotation + lane) % totalRacers;
+        const racer = racers[racerIndex];
+        if (racer) heat.push(racer);
       }
 
       heats.push(heat);
     }
   } else {
-    // More cars than lanes - use round-robin rotation
-    // Each car runs 'rounds' times, with lane assignments rotating
+    // More racers than lanes - use round-robin rotation
+    // Each racer runs 'rounds' times, with lane assignments rotating
 
     // Calculate how many heats we need
-    const heatsPerRound = Math.ceil(totalCars / laneCount);
+    const heatsPerRound = Math.ceil(totalRacers / laneCount);
 
     for (let round = 0; round < rounds; round++) {
       // Create a shuffled list for this round (rotate by round offset)
-      const rotatedCars = [...cars];
-      for (let i = 0; i < round && rotatedCars.length > 0; i++) {
-        const car = rotatedCars.shift();
-        if (car) rotatedCars.push(car);
+      const rotatedRacers = [...racers];
+      for (let i = 0; i < round && rotatedRacers.length > 0; i++) {
+        const racer = rotatedRacers.shift();
+        if (racer) rotatedRacers.push(racer);
       }
 
       for (let heatIdx = 0; heatIdx < heatsPerRound; heatIdx++) {
@@ -475,9 +405,9 @@ function generateBalancedHeats(
         const startIdx = heatIdx * laneCount;
 
         for (let lane = 0; lane < laneCount; lane++) {
-          const carIdx = (startIdx + lane) % totalCars;
-          const car = rotatedCars[carIdx];
-          if (car) heat.push(car);
+          const racerIdx = (startIdx + lane) % totalRacers;
+          const racer = rotatedRacers[racerIdx];
+          if (racer) heat.push(racer);
         }
 
         heats.push(heat);

@@ -1,5 +1,5 @@
 ---
-description: Use Bun instead of Node.js, npm, pnpm, or vite.
+description: DerbyTimer - Pinewood Derby race management with Bun, shadcn/ui, and projector-optimized UI
 globs: "*.ts, *.tsx, *.html, *.css, *.js, *.jsx, package.json"
 alwaysApply: false
 ---
@@ -26,21 +26,72 @@ Default to using Bun instead of Node.js.
 
 ## Testing
 
-Use `bun test` to run tests.
+Use `bun test` to run tests. Create comprehensive test files that describe how the API works.
 
-```ts#index.test.ts
-import { test, expect } from "bun:test";
+```ts#tests/api.test.ts
+import { describe, expect, it, beforeAll, afterAll } from "bun:test";
 
-test("hello world", () => {
-  expect(1).toBe(1);
+describe("DerbyTimer API", () => {
+  it("should create an event", async () => {
+    const response = await fetch("http://localhost:3000/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "Test Derby", date: "2026-02-15", lane_count: 4 }),
+    });
+    expect(response.status).toBe(201);
+  });
 });
 ```
 
-## Frontend
+## Frontend - shadcn/ui & Tailwind
+
+Use shadcn/ui components as the foundation. Add components with:
+
+```bash
+bunx shadcn add <component>
+```
+
+Preferred components: `button`, `card`, `input`, `badge`, `tabs`, `dialog`, `select`, `table`, `tooltip`
+
+Always use Tailwind utility classes over custom CSS:
+
+```tsx
+// Good: Tailwind utilities
+<div className="flex items-center gap-4 p-6 bg-slate-50 rounded-xl border-2 border-slate-200">
+
+// Bad: Custom CSS
+<div className="my-custom-card">
+```
+
+## Design Principles - Projector-Optimized & "Derp" UX
+
+**Target: Elementary school volunteers under mild chaos**
+
+### Visual Design for Projection
+- **Light mode only** - projects better, easier to read in lit rooms
+- **High contrast** - slate-900 text on white backgrounds minimum
+- **Large typography** - text-xl minimum for headers, text-lg for content
+- **Bold weights** - font-bold, font-black for emphasis
+- **Orange accent color** (#f97316) for CTAs and highlights
+
+### "Derp" UX - Foolproof Simplicity
+- **One action per screen** - don't overwhelm users
+- **Big buttons** - h-12 (48px) minimum for all actions
+- **Clear labels** - no icons without text labels
+- **Confirmation dialogs** for destructive actions (delete, clear)
+- **Visual feedback** - loading states, success badges, clear status indicators
+- **No nested navigation** - flat structure, tabs for sub-sections
+- **Event context always visible** - show current event name prominently
+
+### Layout
+- **Max-width containers** - max-w-7xl for main content
+- **Generous spacing** - gap-4 minimum between elements
+- **Card-based organization** - use Card components to group related info
+- **Sticky navigation** - keep nav visible at top
+
+## Server
 
 Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
-
-Server:
 
 ```ts#index.ts
 import index from "./index.html"
@@ -54,18 +105,6 @@ Bun.serve({
       },
     },
   },
-  // optional websocket support
-  websocket: {
-    open: (ws) => {
-      ws.send("Hello, world!");
-    },
-    message: (ws, message) => {
-      ws.send(message);
-    },
-    close: (ws) => {
-      // handle close
-    }
-  },
   development: {
     hmr: true,
     console: true,
@@ -73,39 +112,23 @@ Bun.serve({
 })
 ```
 
-HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
+## Data Model Simplicity
 
-```html#index.html
-<html>
-  <body>
-    <h1>Hello, world!</h1>
-    <script type="module" src="./frontend.tsx"></script>
-  </body>
-</html>
-```
+Keep the data model flat and simple:
+- **Merged entities** - racers include car info (no separate cars table)
+- **Minimal fields** - only what's absolutely necessary
+- **No categories/classes** - keep it simple for single-track racing
+- **Direct relationships** - avoid complex many-to-many where possible
 
-With the following `frontend.tsx`:
-
-```tsx#frontend.tsx
-import React from "react";
-import { createRoot } from "react-dom/client";
-
-// import .css files directly and it works
-import './index.css';
-
-const root = createRoot(document.body);
-
-export default function Frontend() {
-  return <h1>Hello, world!</h1>;
+```typescript
+// Simple racer with car info
+interface Racer {
+  id: string;
+  name: string;
+  den: string | null;
+  car_number: string;
+  weight_ok: number;
 }
-
-root.render(<Frontend />);
-```
-
-Then, run index.ts
-
-```sh
-bun --hot ./index.ts
 ```
 
 For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.

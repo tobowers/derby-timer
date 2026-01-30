@@ -23,7 +23,7 @@ A comprehensive Pinewood Derby race management system inspired by DerbyNet. Buil
 
 ## Requirements
 
-- [Bun](https://bun.com) (v1.0+)
+- [Bun](https://bun.com) (v1.2+)
 - Modern web browser
 
 ## Quick Start
@@ -175,13 +175,9 @@ The system uses a balanced lane rotation algorithm:
 - **Runtime**: Bun (TypeScript, built-in bundler)
 - **Database**: SQLite via `bun:sqlite`
 - **Migrations**: Umzug
-- **Frontend**: Vanilla TypeScript SPA
+- **Frontend**: React SPA
 - **Styling**: CSS with racing theme (Oswald + Space Grotesk fonts)
 - **Server**: Bun.serve() with HMR
-
-## License
-
-MIT
 
 ---
 

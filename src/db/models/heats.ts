@@ -17,7 +17,7 @@ export interface HeatLane {
   id: string;
   heat_id: string;
   lane_number: number;
-  car_id: string;
+  racer_id: string;
   created_at: string;
 }
 
@@ -25,7 +25,7 @@ export interface CreateHeatInput {
   event_id: string;
   round: number;
   heat_number: number;
-  lanes: { lane_number: number; car_id: string }[];
+  lanes: { lane_number: number; racer_id: string }[];
 }
 
 export class HeatRepository {
@@ -50,9 +50,9 @@ export class HeatRepository {
     for (const lane of input.lanes) {
       const laneId = crypto.randomUUID();
       this.db.run(
-        `INSERT INTO heat_lanes (id, heat_id, lane_number, car_id, created_at)
+        `INSERT INTO heat_lanes (id, heat_id, lane_number, racer_id, created_at)
          VALUES (?, ?, ?, ?, ?)`,
-        [laneId, id, lane.lane_number, lane.car_id, now]
+        [laneId, id, lane.lane_number, lane.racer_id, now]
       );
     }
 
@@ -87,10 +87,9 @@ export class HeatRepository {
     if (!heat) return null;
 
     const lanes = this.db.query(
-      `SELECT hl.*, c.car_number, r.first_name || ' ' || r.last_name as racer_name
+      `SELECT hl.*, r.car_number, r.name as racer_name
        FROM heat_lanes hl
-       JOIN cars c ON hl.car_id = c.id
-       JOIN racers r ON c.racer_id = r.id
+       JOIN racers r ON hl.racer_id = r.id
        WHERE hl.heat_id = ?
        ORDER BY hl.lane_number`
     ).all(heatId) as (HeatLane & { car_number: string; racer_name: string })[];
@@ -102,10 +101,9 @@ export class HeatRepository {
     const heats = this.findByEvent(eventId);
     return heats.map(heat => {
       const lanes = this.db.query(
-        `SELECT hl.*, c.car_number, r.first_name || ' ' || r.last_name as racer_name
+        `SELECT hl.*, r.car_number, r.name as racer_name
          FROM heat_lanes hl
-         JOIN cars c ON hl.car_id = c.id
-         JOIN racers r ON c.racer_id = r.id
+         JOIN racers r ON hl.racer_id = r.id
          WHERE hl.heat_id = ?
          ORDER BY hl.lane_number`
       ).all(heat.id) as (HeatLane & { car_number: string; racer_name: string })[];

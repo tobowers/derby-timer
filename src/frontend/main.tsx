@@ -1,0 +1,199 @@
+import React, { useState, useEffect, createContext, useContext } from 'react';
+import { createRoot } from 'react-dom/client';
+import { Flag, Users, Monitor, ExternalLink, Clock, BarChart3, Activity } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
+import './styles/styles.css';
+
+import type { Event, Racer, Heat, Standing } from './types';
+import { AppContext, useApp } from './context';
+import { api } from './api';
+
+import { EventsView } from './views/EventsView';
+import { RegistrationView } from './views/RegistrationView';
+import { HeatsView } from './views/HeatsView';
+import { RaceConsoleView } from './views/RaceConsoleView';
+import { StandingsView } from './views/StandingsView';
+
+// ===== MAIN APP =====
+
+function App() {
+  const [currentView, setCurrentView] = useState<'events' | 'register' | 'heats' | 'race' | 'standings'>('events');
+  const [currentEvent, setCurrentEvent] = useState<Event | null>(null);
+  const [racers, setRacers] = useState<Racer[]>([]);
+  const [heats, setHeats] = useState<Heat[]>([]);
+  const [standings, setStandings] = useState<Standing[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const refreshData = async () => {
+    if (!currentEvent) return;
+    setLoading(true);
+    const [racersData, heatsData, standingsData] = await Promise.all([
+      api.getRacers(currentEvent.id),
+      api.getHeats(currentEvent.id),
+      api.getStandings(currentEvent.id)
+    ]);
+    setRacers(racersData);
+    setHeats(heatsData);
+    setStandings(standingsData);
+    setLoading(false);
+  };
+
+  const selectEvent = async (event: Event | null) => {
+    if (!event) {
+      setCurrentEvent(null);
+      setRacers([]);
+      setHeats([]);
+      setStandings([]);
+      setCurrentView('events');
+      return;
+    }
+    
+    setCurrentEvent(event);
+    setLoading(true);
+    const [racersData, heatsData, standingsData] = await Promise.all([
+      api.getRacers(event.id),
+      api.getHeats(event.id),
+      api.getStandings(event.id)
+    ]);
+    setRacers(racersData);
+    setHeats(heatsData);
+    setStandings(standingsData);
+    setLoading(false);
+    setCurrentView('register');
+  };
+
+  const contextValue = {
+    currentEvent,
+    racers,
+    heats,
+    standings,
+    refreshData,
+    selectEvent
+  };
+
+  return (
+    <AppContext.Provider value={contextValue}>
+      <div className="min-h-screen bg-slate-50 text-slate-900 font-sans">
+        <Navigation 
+          currentView={currentView} 
+          onNavigate={setCurrentView}
+          onGoHome={() => selectEvent(null)}
+        />
+        <main className="max-w-7xl mx-auto px-6 py-8">
+          {loading && (
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50">
+              <div className="bg-white p-8 rounded-xl shadow-2xl border-l-4 border-orange-500">
+                <div className="animate-spin text-orange-500 mb-4">
+                  <Activity size={48} />
+                </div>
+                <p className="text-slate-600 font-semibold">Loading...</p>
+              </div>
+            </div>
+          )}
+          
+          {currentView === 'events' && <EventsView onSelectEvent={selectEvent} />}
+          {currentView === 'register' && <RegistrationView />}
+          {currentView === 'heats' && <HeatsView />}
+          {currentView === 'race' && <RaceConsoleView />}
+          {currentView === 'standings' && <StandingsView />}
+        </main>
+      </div>
+    </AppContext.Provider>
+  );
+}
+
+// ===== NAVIGATION =====
+
+function Navigation({ 
+  currentView, 
+  onNavigate,
+  onGoHome
+}: { 
+  currentView: string; 
+  onNavigate: (view: any) => void;
+  onGoHome: () => void;
+}) {
+  const { currentEvent } = useApp();
+  
+  const navItems = [
+    { id: 'register', label: 'Registration', icon: Users },
+    { id: 'heats', label: 'Schedule', icon: Clock },
+    { id: 'race', label: 'Race Control', icon: Flag },
+    { id: 'standings', label: 'Standings', icon: BarChart3 }
+  ];
+
+  return (
+    <nav className="sticky top-0 z-40 bg-white border-b-2 border-slate-200 shadow-sm">
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="flex items-center justify-between h-16">
+          <div 
+            className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={onGoHome}
+          >
+            <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center shadow-lg">
+              <Flag className="w-6 h-6 text-white" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-xl font-black uppercase tracking-tight text-slate-900 leading-none">
+                Derby<span className="text-orange-500">Timer</span>
+              </span>
+              {currentEvent && (
+                <span className="text-xs text-slate-500 font-medium truncate max-w-[200px]">
+                  {currentEvent.name}
+                </span>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex gap-1">
+            {!currentEvent ? (
+              <Badge variant="outline" className="px-4 py-2 text-sm font-semibold">
+                Select an event to begin
+              </Badge>
+            ) : (
+              <>
+                {navItems.map(item => {
+                  const Icon = item.icon;
+                  const isActive = currentView === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => onNavigate(item.id)}
+                      className={cn(
+                        "flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200",
+                        isActive
+                          ? "bg-slate-900 text-white shadow-md"
+                          : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                      )}
+                    >
+                      <Icon size={18} />
+                      <span className="hidden md:inline">{item.label}</span>
+                    </button>
+                  );
+                })}
+                
+                <a
+                  href="/display"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 text-slate-600 hover:text-slate-900 hover:bg-slate-100 border-l border-slate-300 ml-2"
+                  title="Open Display View for Projector"
+                >
+                  <Monitor size={18} />
+                  <span className="hidden md:inline">Display</span>
+                  <ExternalLink size={14} className="text-slate-400" />
+                </a>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </nav>
+  );
+}
+
+// ===== MOUNT APP =====
+
+const root = createRoot(document.getElementById('app')!);
+root.render(<App />);
