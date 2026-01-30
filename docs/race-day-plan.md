@@ -5,6 +5,8 @@
 - Generate heats that give each car a balanced lane rotation (every lane hit if possible).
 - Enter results by win/loss (placement) with an optional time capture for tie-breaking.
 - Keep the flow fast for race day: minimal clicks, obvious next action.
+- Big font / legible screens, especially for heats and showing winners, these screens will be projected on a wall
+- there are around 50 cars racing so around 100 people.
 
 ## Scope & Assumptions
 - Build a lightweight DerbyNet-inspired flow inside this Bun app.
@@ -13,6 +15,8 @@
 - Start with 4 lanes, but model lanes as a configurable count.
 
 ## Data Model (SQLite via bun:sqlite)
+handle migrations with https://github.com/sequelize/umzug
+
 - events
   - id, name, date, laneCount, status (draft|checkin|racing|complete)
 - racers
@@ -96,16 +100,6 @@
   - Filter by class/den.
 - Add a "Heat Coverage" view:
   - For each car: lane counts, heats run, upcoming lane needs.
-
-### 5) API Endpoints (Bun.serve)
-- POST /api/events
-- GET /api/events/:id
-- POST /api/racers
-- POST /api/cars
-- POST /api/heats/generate
-- GET /api/heats/queue
-- POST /api/heats/:id/results
-- GET /api/standings
 
 ### 6) Race Day Admin Checklist
 - Pre-race day
