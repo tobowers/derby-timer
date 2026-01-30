@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import type { Racer } from '../types';
 import { api } from '../api';
@@ -75,21 +77,27 @@ function RacersTab({ racers, searchTerm, setSearchTerm }: { racers: Racer[], sea
   const [newRacerName, setNewRacerName] = useState('');
   const [newRacerDen, setNewRacerDen] = useState('');
   const [newRacerCarNumber, setNewRacerCarNumber] = useState('');
+  const [newRacerInspected, setNewRacerInspected] = useState(true);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!newRacerName.trim() || !newRacerCarNumber) return;
     
-    await api.createRacer(currentEvent!.id, {
+    const racer = await api.createRacer(currentEvent!.id, {
       name: newRacerName.trim(),
       den: newRacerDen || null,
       car_number: newRacerCarNumber,
     });
     
+    if (newRacerInspected) {
+      await api.inspectRacer(racer.id, true);
+    }
+    
     setNewRacerName('');
     setNewRacerDen('');
     setNewRacerCarNumber('');
+    setNewRacerInspected(true);
     setShowAddForm(false);
     refreshData();
   };
@@ -143,6 +151,16 @@ function RacersTab({ racers, searchTerm, setSearchTerm }: { racers: Racer[], sea
                   placeholder="7"
                   className="h-12"
                 />
+              </div>
+              <div className="md:col-span-4 flex items-center gap-3 py-2">
+                <Checkbox 
+                  id="inspected" 
+                  checked={newRacerInspected}
+                  onCheckedChange={(checked) => setNewRacerInspected(checked === true)}
+                />
+                <Label htmlFor="inspected" className="font-semibold cursor-pointer text-slate-700">
+                  Inspected (ready to race)
+                </Label>
               </div>
               <div className="md:col-span-4 flex gap-2">
                 <Button type="submit" className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-semibold h-12">

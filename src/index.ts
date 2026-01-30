@@ -361,6 +361,7 @@ Bun.serve({
 });
 
 // Heat generation algorithm - balanced lane rotation
+// Ensures every car races in every lane exactly once when possible
 function generateBalancedHeats(
   racers: { id: string; car_number: string }[],
   laneCount: number,
@@ -369,48 +370,99 @@ function generateBalancedHeats(
   const heats: { id: string; car_number: string }[][] = [];
   const totalRacers = racers.length;
 
-  // If we have fewer racers than lanes, we need to run multiple rounds
-  // to ensure each racer runs in each lane
+  if (totalRacers === 0 || laneCount === 0) {
+    return heats;
+  }
+
+  // Handle case where we have fewer racers than lanes
   if (totalRacers <= laneCount) {
-    for (let round = 0; round < rounds; round++) {
-      // Rotate starting position for each round
-      const rotation = round % totalRacers;
+    // Each racer needs to run in each lane
+    // We need laneCount heats minimum (one per lane)
+    // Each heat will have all racers, rotated through lanes
+    const heatsNeeded = Math.max(laneCount, rounds);
+
+    for (let heatIdx = 0; heatIdx < heatsNeeded; heatIdx++) {
       const heat: { id: string; car_number: string }[] = [];
 
       for (let lane = 0; lane < laneCount; lane++) {
-        const racerIndex = (rotation + lane) % totalRacers;
+        // Rotate which racer is in which lane
+        const racerIndex = (heatIdx + lane) % totalRacers;
         const racer = racers[racerIndex];
-        if (racer) heat.push(racer);
+        if (racer) {
+          heat.push(racer);
+        }
       }
 
       heats.push(heat);
     }
   } else {
-    // More racers than lanes - use round-robin rotation
-    // Each racer runs 'rounds' times, with lane assignments rotating
+    // More racers than lanes
+    // We need to ensure each car races in each lane
+    // This requires a more complex rotation algorithm
 
-    // Calculate how many heats we need
-    const heatsPerRound = Math.ceil(totalRacers / laneCount);
+    // Calculate how many heats each car needs (one per lane)
+    const heatsPerCar = Math.max(laneCount, rounds);
 
-    for (let round = 0; round < rounds; round++) {
-      // Create a shuffled list for this round (rotate by round offset)
-      const rotatedRacers = [...racers];
-      for (let i = 0; i < round && rotatedRacers.length > 0; i++) {
-        const racer = rotatedRacers.shift();
-        if (racer) rotatedRacers.push(racer);
-      }
+    // Total car-lane assignments needed
+    const totalAssignments = totalRacers * heatsPerCar;
 
-      for (let heatIdx = 0; heatIdx < heatsPerRound; heatIdx++) {
-        const heat: { id: string; car_number: string }[] = [];
-        const startIdx = heatIdx * laneCount;
+    // Each heat provides 'laneCount' assignments
+    const totalHeats = Math.ceil(totalAssignments / laneCount);
 
-        for (let lane = 0; lane < laneCount; lane++) {
-          const racerIdx = (startIdx + lane) % totalRacers;
-          const racer = rotatedRacers[racerIdx];
-          if (racer) heat.push(racer);
+    // Use a round-robin tournament scheduling approach
+    // Create a grid where rows are heats and columns are lanes
+    // Each car appears exactly once in each column (lane)
+
+    // Initialize tracking: which lanes each car has used
+    const carLaneCounts: Map<string, number[]> = new Map();
+    for (const racer of racers) {
+      carLaneCounts.set(racer.id, new Array(laneCount).fill(0));
+    }
+
+    // Generate heats
+    for (let heatIdx = 0; heatIdx < totalHeats; heatIdx++) {
+      const heat: ({ id: string; car_number: string } | null)[] = new Array(laneCount).fill(null);
+      const usedCars = new Set<string>();
+
+      // For each lane, find a car that:
+      // 1. Hasn't been used in this heat
+      // 2. Has the lowest count for this specific lane
+      // 3. Has the lowest total lane count overall
+
+      for (let lane = 0; lane < laneCount; lane++) {
+        let bestCar: { id: string; car_number: string } | null = null;
+        let bestScore = Infinity;
+
+        for (const racer of racers) {
+          if (usedCars.has(racer.id)) continue;
+
+          const laneCounts = carLaneCounts.get(racer.id);
+          if (!laneCounts) continue;
+          const thisLaneCount = laneCounts[lane] ?? 0;
+          const totalCount = laneCounts.reduce((a, b) => a + b, 0);
+
+          // Score: prioritize cars that need this lane, then by total usage
+          const score = thisLaneCount * 1000 + totalCount;
+
+          if (score < bestScore) {
+            bestScore = score;
+            bestCar = racer;
+          }
         }
 
-        heats.push(heat);
+        if (bestCar) {
+          heat[lane] = bestCar;
+          usedCars.add(bestCar.id);
+          const counts = carLaneCounts.get(bestCar.id);
+          if (counts) {
+            counts[lane]++;
+          }
+        }
+      }
+
+      // Only add heat if all lanes are filled
+      if (heat.every(car => car !== null)) {
+        heats.push(heat as { id: string; car_number: string }[]);
       }
     }
   }
